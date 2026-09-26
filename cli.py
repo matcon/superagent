@@ -447,7 +447,7 @@ def handle_version(_args):
     try:
         res = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, cwd=Path(__file__).parent
+            capture_output=True, text=True, cwd=Path(__file__).resolve().parent
         )
         if res.returncode == 0:
             commit = res.stdout.strip()
