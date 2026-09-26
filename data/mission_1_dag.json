@@ -1,0 +1,42 @@
+{
+  "goal": "Misión 1: Prueba de Fuego del SuperAgente Autónomo",
+  "tasks": [
+    {
+      "id": "task_sec",
+      "name": "Auditoría de Red y Puertos de Escucha",
+      "role": "security_auditor",
+      "skills": ["security-review"],
+      "command": "python3 -c \"import subprocess; res = subprocess.run(['ss', '-tulpn'], capture_output=True, text=True); lines = [l for l in res.stdout.splitlines() if 'LISTEN' in l]; print(f'Sockets activos en escucha: {len(lines)}')\""
+    },
+    {
+      "id": "task_hw",
+      "name": "Telemetría de Memoria ZRAM y Compresión",
+      "role": "performance_benchmarker",
+      "skills": ["agency-performance-benchmarker"],
+      "command": "python3 -c \"import subprocess; res = subprocess.run(['zramctl', '--output-all'], capture_output=True, text=True); print('ZRAM Status:', res.stdout.splitlines()[-1])\""
+    },
+    {
+      "id": "task_jit",
+      "name": "Síntesis JIT de Herramienta Zombie Hunter",
+      "role": "jit_tool_synthesizer",
+      "skills": ["mcp-builder"],
+      "command": "cat << 'EOF' > /tmp/zombie_code.py\nimport sys\nimport subprocess\n\ndef scan_zombies():\n    res = subprocess.run(['ps', '-eo', 'pid,stat,comm'], capture_output=True, text=True)\n    zombies = [l for l in res.stdout.splitlines() if len(l.split()) >= 2 and 'Z' in l.split()[1]]\n    print(f'Procesos Zombie Detectados: {len(zombies)}')\n    return 0\n\nif __name__ == '__main__':\n    sys.exit(scan_zombies())\nEOF\nsuperagent jit create --name \"zombie_hunter\" --desc \"Escáner ultrarrápido de procesos zombie y huérfanos\" --file /tmp/zombie_code.py\nrm -f /tmp/zombie_code.py"
+    },
+    {
+      "id": "task_verify",
+      "name": "Verificación y Bucle de Reflexión en Caliente",
+      "role": "qa_verifier",
+      "skills": ["agency-code-reviewer"],
+      "depends_on": ["task_jit"],
+      "command": "superagent verify \"python3 /home/mat/.superagent/tools/zombie_hunter.py\""
+    },
+    {
+      "id": "task_finalize",
+      "name": "Consolidación en Memoria y Notificación Nativa OS",
+      "role": "meta_orchestrator",
+      "skills": ["orchestration"],
+      "depends_on": ["task_sec", "task_hw", "task_verify"],
+      "command": "superagent memory add --category \"mission_test\" --problem \"Validar orquestación concurrente en enjambre DAG y síntesis JIT\" --solution \"Ejecución en 3 ondas paralelas con verificación cerrada y alerta Wayland\" --context \"Arch Linux Niri Host\" --tags \"test,dag,swarm,jit,success\" && superagent notify \"SuperAgent: Misión 1 Concluida\" \"Enjambre de 5 tareas ejecutado con éxito. Telemetría consolidada y tool JIT activa.\""
+    }
+  ]
+}
