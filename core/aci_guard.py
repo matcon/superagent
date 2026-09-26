@@ -122,12 +122,14 @@ class ACIGuard:
         complexity = 1
         max_depth = 0
 
-        def traverse_depth(node: ast.AST, current_depth: int):
-            nonlocal complexity, max_depth
-            if current_depth > max_depth:
-                max_depth = current_depth
+        # Iterative stack traversal to avoid recursion and nested function scope
+        stack = [(fn_node, 0)]
+        while stack:
+            curr_node, curr_depth = stack.pop()
+            if curr_depth > max_depth:
+                max_depth = curr_depth
 
-            for child in ast.iter_child_nodes(node):
+            for child in ast.iter_child_nodes(curr_node):
                 is_decision = False
                 increases_depth = False
 
@@ -140,18 +142,15 @@ class ACIGuard:
                 elif isinstance(child, ast.Assert):
                     is_decision = True
                 elif isinstance(child, ast.BoolOp):
-                    # In a boolean expression (a and b and c), each op adds a branch
-                    complexity += len(child.values) - 1
+                    complexity += max(0, len(child.values) - 1)
                 elif isinstance(child, (ast.comprehension, ast.IfExp)):
                     is_decision = True
 
                 if is_decision:
                     complexity += 1
 
-                new_depth = current_depth + 1 if increases_depth else current_depth
-                traverse_depth(child, new_depth)
-
-        traverse_depth(fn_node, 0)
+                new_depth = curr_depth + 1 if increases_depth else curr_depth
+                stack.append((child, new_depth))
 
         violations = []
         if not is_suppressed:

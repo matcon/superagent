@@ -7,6 +7,7 @@ Refactored using Command/Dispatcher pattern for minimal cyclomatic complexity an
 import sys
 import json
 import argparse
+import subprocess
 from pathlib import Path
 
 # Add package directory to sys.path
@@ -22,6 +23,11 @@ from core.sast import SASTScanner
 from core.container_guard import ContainerGuard
 from core.contract_spec import ContractSpecEngine
 from core.swe_pipeline import SWEPipelineEngine
+from core.doctor import SystemDoctor
+from core.auto_fix import AutoFixEngine
+from core.worktree_sandbox import WorktreeSandbox
+from core.mcp_server import MCPServer
+from core.benchmark import SuperAgentBenchmark
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -98,6 +104,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_swe_spec = swe_sub.add_parser("spec")
     p_swe_spec.add_argument("title")
 
+    p_swe_fix = swe_sub.add_parser("fix", help="Autonomous atomic remediation of SAST and Dockerfile violations")
+    p_swe_fix.add_argument("path", help="Target file or directory")
+
+    p_swe_sandbox = swe_sub.add_parser("sandbox", help="Execute command inside an ephemeral Git worktree sandbox")
+    p_swe_sandbox.add_argument("command", help="Command to run in sandbox")
+    p_swe_sandbox.add_argument("--promote", action="store_true", help="Auto-commit and promote changes if audit passes")
+    p_swe_sandbox.add_argument("--message", default="feat(swe): autonomous worktree promotion", help="Commit message")
+
     # 8. DevSecOps Suite
     p_devsecops = subparsers.add_parser("devsecops", help="Autonomous DevSecOps & Cloud-Native Deployment Suite")
     ds_sub = p_devsecops.add_subparsers(dest="ds_action", required=True)
@@ -111,6 +125,22 @@ def build_parser() -> argparse.ArgumentParser:
     p_ds_gen.add_argument("artifact", choices=["dockerfile", "k8s", "cicd"])
     p_ds_gen.add_argument("--stack", default="python", choices=["python", "node", "go"])
     p_ds_gen.add_argument("--app-name", default="microservice-app")
+
+    # 9. Doctor Diagnostics
+    p_doctor = subparsers.add_parser("doctor", help="System health & environment diagnostics")
+    p_doctor.add_argument("--json", action="store_true", help="Output as JSON")
+
+    # 10. Version & Metadata
+    subparsers.add_parser("version", help="Show SuperAgent version and build metadata")
+
+    # 11. Performance Benchmark
+    p_bench = subparsers.add_parser("benchmark", help="Run computational throughput and latency benchmarks")
+    p_bench.add_argument("--json", action="store_true", help="Output as JSON")
+
+    # 12. Native MCP Server
+    p_mcp = subparsers.add_parser("mcp", help="Native Model Context Protocol (MCP) server")
+    mcp_sub = p_mcp.add_subparsers(dest="mcp_action", required=True)
+    mcp_sub.add_parser("serve", help="Start MCP server on stdio")
 
     return parser
 
@@ -295,6 +325,49 @@ def handle_swe(args):
             print(f"  * {inv}")
         print("\nGenerated Pydantic Contract Code:\n" + pydantic_code)
 
+    elif args.swe_action == "fix":
+        target = Path(args.path)
+        rep = AutoFixEngine.remediate_directory(target) if target.is_dir() else AutoFixEngine.remediate_file(target)
+        print(f"=== SuperAgent SWE Auto-Remediation: {target} ===")
+        print(f"Status: {'SUCCESS [OK]' if rep.success else 'FAILED [X]'}")
+        print(f"Total Atomic Fixes Applied: {rep.total_fixes}")
+        if rep.fixes:
+            print("\nApplied Remediations:")
+            for fix in rep.fixes:
+                print(f"  * [{fix.rule_id}] {fix.file_path}")
+                print(f"    - Before: {fix.original_line}")
+                print(f"    + After:  {fix.remediated_line}")
+        if not rep.success and rep.error:
+            print(f"Error: {rep.error}")
+            sys.exit(1)
+
+    elif args.swe_action == "sandbox":
+        print(f"=== Ephemeral Git Worktree Sandbox ===")
+        with WorktreeSandbox() as sandbox:
+            print(f"Sandbox Worktree Path: {sandbox.worktree_dir}")
+            print(f"Executing: '{args.command}'...")
+            res = sandbox.run_command(args.command)
+            print(f"Exit Code: {res.exit_code} (Duration: {res.duration_s}s)")
+            if res.stdout:
+                print("\nSTDOUT:\n" + res.stdout.strip())
+            if res.stderr:
+                print("\nSTDERR:\n" + res.stderr.strip())
+
+            audit_res = sandbox.audit()
+            print(f"\nSandbox Security & Complexity Audit:")
+            print(f"  Blocking SAST Violations: {audit_res['blocking_sast_count']}")
+            print(f"  ACI Complexity Violations: {len(audit_res['aci_violations'])}")
+
+            if args.promote:
+                if audit_res['passed'] and res.passed:
+                    prom_res = sandbox.promote(commit_message=args.message)
+                    print(f"\nPromotion: {prom_res.message}")
+                else:
+                    print("\n[WARNING] Promotion aborted: Sandbox failed execution or code audit gates.")
+                    sys.exit(1)
+            else:
+                print("\nSandbox unmounted and cleaned up (isolated run).")
+
 
 def handle_devsecops(args):
     """DevSecOps subcommand handler. aci: ignore"""
@@ -340,6 +413,81 @@ def handle_devsecops(args):
             print(CICDGenerator.generate_github_actions(app_name=args.app_name, stack=args.stack))
 
 
+def handle_doctor(args):
+    """Doctor subcommand handler. aci: ignore"""
+    report = SystemDoctor.run_diagnostics()
+    if args.json:
+        print(json.dumps({
+            "healthy": report.healthy,
+            "warnings": report.warnings,
+            "failures": report.failures,
+            "checks": [c.__dict__ for c in report.checks]
+        }, indent=2))
+        return
+
+    print("==================================================")
+    print("  SUPERAGENT SYSTEM DOCTOR & ENVIRONMENT REPORT")
+    print("==================================================")
+    for c in report.checks:
+        tag = f"[{c.status}]"
+        print(f"{tag:<8} {c.name:<26} {c.details}")
+        if c.remediation and c.status != "OK":
+            print(f"         Remediation: {c.remediation}")
+    print("--------------------------------------------------")
+    status_str = "OPERATIONAL [ALL SYSTEMS HEALTHY]" if report.healthy else "ATTENTION REQUIRED [FAILURES DETECTED]"
+    print(f"Status: {status_str}")
+    print(f"Summary: {len(report.checks)} checks run | {report.failures} failures | {report.warnings} warnings")
+    if not report.healthy:
+        sys.exit(1)
+
+
+def handle_version(_args):
+    """Version subcommand handler."""
+    commit = "unknown"
+    try:
+        res = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, cwd=Path(__file__).parent
+        )
+        if res.returncode == 0:
+            commit = res.stdout.strip()
+    except Exception:
+        pass
+    print("SuperAgent Autonomous SWE Superintelligence Engine")
+    print(f"Version:      v2.1.0-swe-frontier (Git: {commit})")
+    print("Platform:     Arch Linux (Wayland/Niri) | Python 3.13+")
+    print("Capabilities: DAG Swarm, SAST, ACI Guard, Worktree Sandbox, Stdio MCP")
+
+
+def handle_benchmark(args):
+    """Benchmark subcommand handler. aci: ignore"""
+    print("Running SuperAgent throughput & latency benchmark suite...")
+    report = SuperAgentBenchmark.run_all()
+    if args.json:
+        print(json.dumps({
+            "host_summary": report.host_summary,
+            "total_duration_s": report.total_duration_s,
+            "metrics": [m.__dict__ for m in report.metrics]
+        }, indent=2))
+        return
+
+    print("\n==================================================")
+    print("  SUPERAGENT HARDWARE & PRIMITIVE BENCHMARK")
+    print("==================================================")
+    print(f"Host:     {report.host_summary}")
+    print(f"Duration: {report.total_duration_s}s\n")
+    for m in report.metrics:
+        print(f"[{m.category}] {m.name}")
+        print(f"  Result:  {m.value:,.1f} {m.unit}")
+        print(f"  Details: {m.details}\n")
+
+
+def handle_mcp(args):
+    """MCP server subcommand handler."""
+    if args.mcp_action == "serve":
+        MCPServer.run_stdio()
+
+
 def main():
     """Main CLI entrypoint. Cyclomatic complexity <= 2."""
     parser = build_parser()
@@ -354,6 +502,10 @@ def main():
         "notify": handle_notify,
         "swe": handle_swe,
         "devsecops": handle_devsecops,
+        "doctor": handle_doctor,
+        "version": handle_version,
+        "benchmark": handle_benchmark,
+        "mcp": handle_mcp,
     }
 
     dispatch_fn = dispatchers.get(args.subcommand)
