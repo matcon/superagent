@@ -38,3 +38,11 @@ jobs:
       - name: Run Primitives Benchmark (JSON)
         run: |
           python3 cli.py benchmark --json
+
+      - name: Install Pytest
+        run: |
+          pip install pytest
+
+      - name: Run Pytest Test Suite
+        run: |
+          pytest tests/ -v

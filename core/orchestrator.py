@@ -156,6 +156,15 @@ class DAGOrchestrator:
                             node.status = "completed"
                             node.result = res["output"]
                             completed.add(node.id)
+
+                            # Detección y mutación dinámica del DAG en caliente
+                            spawned = self._extract_spawned_tasks(res["output"], parent_id=node.id)
+                            if spawned:
+                                for st in spawned:
+                                    if st.id not in self.nodes:
+                                        self.nodes[st.id] = st
+                                        print(f"[SuperAgent DAG] Dynamically mutated DAG: Added task '{st.id}' ({st.name})")
+                                self.validate_dag()
                         else:
                             node.status = "failed"
                             node.error = res["error"]
@@ -173,6 +182,39 @@ class DAGOrchestrator:
             "failed": list(failed),
             "tasks": {nid: asdict(node) for nid, node in self.nodes.items()}
         }
+
+    @classmethod
+    def _extract_spawned_tasks(cls, output: str, parent_id: str) -> List[TaskNode]:
+        """Extrae tareas dinámicamente inyectadas desde la salida del proceso."""
+        if "__SUPERAGENT_SPAWN__:" not in output:
+            return []
+        spawned = []
+        try:
+            parts = output.split("__SUPERAGENT_SPAWN__:")
+            for p in parts[1:]:
+                chunk = p.strip()
+                if chunk.startswith("["):
+                    end_idx = chunk.find("]") + 1
+                    chunk = chunk[:end_idx]
+                else:
+                    chunk = chunk.splitlines()[0]
+
+                tasks_data = json.loads(chunk)
+                for t in tasks_data:
+                    deps = t.get("depends_on", [parent_id])
+                    spawned.append(TaskNode(
+                        id=t["id"],
+                        name=t.get("name", t["id"]),
+                        role=t.get("role", "dynamic_worker"),
+                        skills=t.get("skills", []),
+                        prompt=t.get("prompt", ""),
+                        depends_on=deps,
+                        command=t.get("command"),
+                        cwd=t.get("cwd")
+                    ))
+        except Exception:
+            pass
+        return spawned
 
     def _run_single_task(self, node: TaskNode) -> Dict[str, Any]:
         """Worker executing a single node's command."""

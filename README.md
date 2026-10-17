@@ -1,21 +1,23 @@
 # SuperAgent 🚀
 
 **Autonomous AI Cognitive, SWE Superintelligence & Distributed Execution Engine**  
-*Version: v2.2.0-frontier-hardened | Grade: A+ (100/100)*
+*Version: v2.3.0-swe-frontier-apex | Grade: A+ (100/100)*
 
-SuperAgent is a high-performance, autonomous software engineering superintelligence (SWE-SI) and task orchestration engine. Built for high-reliability local development environments, SuperAgent provides closed-loop verification, episodic memory, static security analysis, container hardening, AST complexity guards, and native Model Context Protocol (MCP) server capabilities.
+SuperAgent is a high-performance, autonomous software engineering superintelligence (SWE-SI) and task orchestration engine. Built for high-reliability local development environments, SuperAgent provides closed-loop verification, episodic memory, static security analysis, container hardening, AST complexity guards, multi-worktree candidate tournaments, dynamic DAG task mutation, and native Model Context Protocol (MCP) server capabilities.
 
 ---
 
 ## Key Features
 
-### 🧠 1. Tripartite Memory Architecture
+### 🧠 1. Tripartite Memory Architecture & Semantic Expansion
 - **Episodic & Reflexion Memory**: SQLite with full-text search (`FTS5`) and BM25 relevance ranking.
+- **Semantic Domain Expansion**: Software engineering synonym mapping (`DOMAIN_SYNONYMS`) bridging lexical and semantic intent.
 - **Concurrent WAL Hardening**: Non-blocking `PRAGMA journal_mode=WAL` with automated deduplication and memory compaction (`compact_learnings`).
 - **Topological Code Understanding**: Deep integration with [Graphify](https://github.com) knowledge graphs (`graphify query`, `GRAPH_REPORT.md`).
 - **Working Memory**: Dynamic execution context and scratch storage.
 
-### 🛡️ 2. SWE Superintelligence & Closed-Loop Reflexion
+### 🛡️ 2. SWE Superintelligence & Multi-Candidate Tournaments
+- **Best-of-N Candidate Tournaments (`swe tournament`)**: Parallel worktree hypothesis testing, scoring candidate patches with a Pareto fitness function and auto-promoting the optimal patch.
 - **Closed-Loop Verification (`verify`)**: Executes tests against ephemeral git checkpoints, analyzing root causes and triggering auto-remediation without regression.
 - **Oscillation Guard**: SHA-256 failure state fingerprinting that detects and terminates cyclical or repetitive patch attempts.
 - **AST Complexity Guard (`swe guard`)**: Enforces McCabe cyclomatic complexity $\le 15$, cognitive depth $\le 5$, reporting exact line spans (`lines start-end`).
@@ -28,13 +30,15 @@ SuperAgent is a high-performance, autonomous software engineering superintellige
 - **Container Hardening (`container-check`)**: Audits Dockerfiles for root user execution, non-multi-stage builds, and missing health checks.
 - **Production Artifact Synthesis**: Generates distroless Dockerfiles, Kubernetes Restricted manifests, and auto-rollback CI/CD pipelines.
 
-### ⚡ 4. Real Concurrency & DAG Swarm Orchestration
+### ⚡ 4. Dynamic Concurrency & DAG Swarm Orchestration
+- **Dynamic Task Spawning & Mutation**: Tasks dynamically emit follow-up subtasks during execution (`__SUPERAGENT_SPAWN__:`), seamlessly expanding the live graph.
 - **Kahn Topological Waves**: Mathematical cycle detection and wave-based concurrent execution scheduling.
 - **Auto-Tuned Telemetry Budget**: Evaluates system memory, CPU load, and host headroom before dispatching worker pools to prevent swapping.
 
 ### 🔌 5. Model Context Protocol (MCP) & Host Integration
 - **Native Stdio MCP Server (`mcp serve`)**: Exposes SuperAgent primitives to any MCP-compliant AI client over standard JSON-RPC 2.0.
-- **Automated CI/CD**: Native GitHub Actions workflow testing diagnostics, security audits, and benchmarks on each push.
+- **PEP 621 Standard Packaging (`pyproject.toml`)**: Installable anywhere with `uv tool install .` or `pip install -e .`.
+- **Automated CI/CD & Pytest**: Native GitHub Actions workflow testing diagnostics, security audits, benchmarks, and running 18 unit tests on each push.
 - **OS & Desktop Integration**: Native Wayland / Niri window manager IPC, Polkit graphical authentication (`pkexec`), and desktop notifications.
 - **JIT Tool Synthesis (`jit`)**: Generates, validates via AST, and registers new Python runtime tools on the fly.
 - **Host Benchmark (`benchmark`)**: Measures raw execution speeds (AST parsing throughput, Shannon entropy throughput, SQLite FTS5 QPS, Git latency).

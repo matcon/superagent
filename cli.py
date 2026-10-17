@@ -115,6 +115,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_swe_sandbox.add_argument("--promote", action="store_true", help="Auto-commit and promote changes if audit passes")
     p_swe_sandbox.add_argument("--message", default="feat(swe): autonomous worktree promotion", help="Commit message")
 
+    p_swe_tourn = swe_sub.add_parser("tournament", help="Execute Best-of-N multi-worktree candidate tournament")
+    p_swe_tourn.add_argument("candidates_json", help="Path to JSON file defining candidate commands")
+    p_swe_tourn.add_argument("--test", default=None, help="Optional test validation command")
+    p_swe_tourn.add_argument("--promote", action="store_true", help="Promote winning candidate to main")
+    p_swe_tourn.add_argument("--workers", type=int, default=2, help="Parallel worker threads")
+    p_swe_tourn.add_argument("--json", action="store_true", help="Output tournament results as JSON")
+
     # 8. DevSecOps Suite
     p_devsecops = subparsers.add_parser("devsecops", help="Autonomous DevSecOps & Cloud-Native Deployment Suite")
     ds_sub = p_devsecops.add_subparsers(dest="ds_action", required=True)
@@ -384,6 +391,37 @@ def handle_swe(args):
             else:
                 print("\nSandbox unmounted and cleaned up (isolated run).")
 
+    elif args.swe_action == "tournament":
+        path = Path(args.candidates_json)
+        if not path.exists():
+            print(f"Error: Candidate file '{args.candidates_json}' not found.")
+            sys.exit(1)
+        data = json.loads(path.read_text())
+        cands = data if isinstance(data, list) else data.get("candidates", [])
+        report = WorktreeSandbox.run_tournament(
+            candidates=cands,
+            test_command=args.test,
+            promote_winner=args.promote,
+            max_workers=args.workers
+        )
+        if getattr(args, "json", False):
+            print(json.dumps(report, indent=2, ensure_ascii=False))
+            return
+        print("==================================================")
+        print("  SUPERAGENT SWE BEST-OF-N CANDIDATE TOURNAMENT")
+        print("==================================================")
+        print(f"Total Candidates: {report['total_candidates']}")
+        for idx, ev in enumerate(report["ranked_evaluations"], 1):
+            tag = "[PASSED]" if ev["passed"] else "[FAILED]"
+            print(f" {idx}. {tag} {ev['candidate_id']} - Score: {ev['score']} (Duration: {ev['duration_s']}s)")
+            print(f"    Desc: {ev['description']}")
+            print(f"    McCabe Max: {ev['mccabe_max']} | SAST Violations: {ev['sast_count']} | Diff: {ev['diff_lines']} lines")
+        if report["winner"]:
+            w = report["winner"]
+            print(f"\n🏆 Tournament Winner: {w['candidate_id']} (Score: {w['score']})")
+            if report.get("promotion"):
+                print(f"   Promotion: {report['promotion']['message']}")
+
 
 def handle_devsecops(args):
     """DevSecOps subcommand handler. aci: ignore"""
@@ -470,9 +508,9 @@ def handle_version(_args):
     except Exception:
         pass
     print("SuperAgent Autonomous SWE Superintelligence Engine")
-    print(f"Version:      v2.2.0-frontier-hardened (Git: {commit})")
+    print(f"Version:      v2.3.0-swe-frontier-apex (Git: {commit})")
     print("Platform:     Arch Linux (Wayland/Niri) | Python 3.13+")
-    print("Capabilities: DAG Swarm (Kahn Waves), SAST, ACI Guard, Worktree Sandbox, Stdio MCP, Reflexion Oscillation Guard")
+    print("Capabilities: DAG Swarm (Kahn Waves & Dynamic Mutation), Best-of-N Tournament, SAST, ACI Guard, Worktree Sandbox, Stdio MCP, Reflexion Oscillation Guard, Semantic Memory Expansion")
 
 
 def handle_benchmark(args):

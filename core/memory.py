@@ -143,14 +143,40 @@ class SuperAgentMemory:
             conn.commit()
             return deleted
 
-    def search_learnings(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
-        """Search learnings using FTS5 BM25 relevance ranking with hardened token sanitization."""
+    DOMAIN_SYNONYMS = {
+        "leak": ["runaway", "unfreed", "bloat", "oom", "exhaustion"],
+        "crash": ["sigsegv", "panic", "abort", "segfault", "exception"],
+        "slow": ["latency", "bottleneck", "lag", "timeout", "degradation"],
+        "lock": ["deadlock", "contention", "mutex", "blocking", "blocked"],
+        "auth": ["permission", "unauthorized", "forbidden", "polkit", "pkexec"],
+        "gpu": ["cuda", "driver", "vulkan", "gallium", "wayland", "niri"],
+        "test": ["verify", "assert", "pytest", "spec", "reflexion"],
+        "network": ["socket", "dns", "connection", "refused", "reset"],
+        "db": ["database", "sqlite", "postgres", "sql", "fts5"],
+    }
+
+    @classmethod
+    def expand_query_tokens(cls, words: List[str]) -> List[str]:
+        """Expande la consulta con sinónimos de ingeniería de software para maximizar recall."""
+        expanded = set(words)
+        for w in words:
+            low = w.lower()
+            if low in cls.DOMAIN_SYNONYMS:
+                expanded.update(cls.DOMAIN_SYNONYMS[low][:3])
+            for key, syns in cls.DOMAIN_SYNONYMS.items():
+                if low in syns:
+                    expanded.add(key)
+        return list(expanded)
+
+    def search_learnings(self, query: str, limit: int = 5, semantic_expand: bool = True) -> List[Dict[str, Any]]:
+        """Search learnings using FTS5 BM25 ranking with semantic domain expansion."""
         # Sanitize query for FTS5 syntax
         clean_words = [w for w in re.findall(r"\w+", query) if w]
         if not clean_words:
             return []
 
-        formatted_query = " OR ".join(f'"{word}"*' for word in clean_words)
+        search_tokens = self.expand_query_tokens(clean_words) if semantic_expand else clean_words
+        formatted_query = " OR ".join(f'"{word}"*' for word in search_tokens)
         with self._get_conn() as conn:
             cursor = conn.cursor()
             try:
