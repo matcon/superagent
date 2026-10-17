@@ -163,20 +163,26 @@ class WorktreeSandbox:
         )
 
     def cleanup(self) -> None:
-        """Elimina de forma segura el worktree y su rama temporal."""
-        if self.created and self.worktree_dir and self.worktree_dir.exists():
-            subprocess.run(
-                ["git", "worktree", "remove", "--force", str(self.worktree_dir)],
-                cwd=self.repo_root, capture_output=True, text=True
-            )
-            if self.branch_name:
+        """Elimina de forma segura el worktree, su rama temporal y poda el índice."""
+        try:
+            if self.created and self.worktree_dir and self.worktree_dir.exists():
                 subprocess.run(
-                    ["git", "branch", "-D", self.branch_name],
+                    ["git", "worktree", "remove", "--force", str(self.worktree_dir)],
                     cwd=self.repo_root, capture_output=True, text=True
                 )
-            if self.worktree_dir.exists():
-                shutil.rmtree(self.worktree_dir, ignore_errors=True)
-            self.created = False
+                if self.branch_name:
+                    subprocess.run(
+                        ["git", "branch", "-D", self.branch_name],
+                        cwd=self.repo_root, capture_output=True, text=True
+                    )
+                if self.worktree_dir.exists():
+                    shutil.rmtree(self.worktree_dir, ignore_errors=True)
+                self.created = False
+        finally:
+            subprocess.run(
+                ["git", "worktree", "prune"],
+                cwd=self.repo_root, capture_output=True, text=True
+            )
 
     def __enter__(self):
         self.create()

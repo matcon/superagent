@@ -92,7 +92,7 @@ class ACIGuard:
                     max_cc = metrics.cyclomatic_complexity
                 if metrics.exceeds_threshold:
                     for v in metrics.violations:
-                        blocking.append(f"Function '{metrics.name}' (line {metrics.line_start}): {v}")
+                        blocking.append(f"Function '{metrics.name}' (lines {metrics.line_start}-{metrics.line_end}): {v}")
 
         passed = len(blocking) == 0
         return ACIGuardReport(

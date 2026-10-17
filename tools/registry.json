@@ -11,7 +11,7 @@
     "description": "Esc\u00e1ner ultrarr\u00e1pido de procesos zombie y hu\u00e9rfanos",
     "path": "/home/mat/.superagent/tools/zombie_hunter.py",
     "dependencies": [],
-    "created_at": "1790216432.002388"
+    "created_at": "1792218780.9210691"
   },
   "analyze_updates": {
     "name": "analyze_updates",

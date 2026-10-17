@@ -9,6 +9,7 @@ import json
 import argparse
 import subprocess
 from pathlib import Path
+from dataclasses import asdict
 
 # Add package directory to sys.path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -65,11 +66,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_verify.add_argument("command", help="Validation command")
     p_verify.add_argument("--timeout", type=int, default=60)
     p_verify.add_argument("--no-checkpoint", action="store_true")
+    p_verify.add_argument("--json", action="store_true", help="Output verification report as JSON")
 
     # 4. DAG Task Orchestrator
     p_dag = subparsers.add_parser("dag", help="Execute a DAG task plan concurrently")
     p_dag.add_argument("plan_json")
     p_dag.add_argument("--workers", type=int, default=None)
+    p_dag.add_argument("--json", action="store_true", help="Output DAG execution summary as JSON")
 
     # 5. JIT Tool Synthesizer
     p_jit = subparsers.add_parser("jit", help="Just-In-Time tool synthesis")
@@ -195,6 +198,12 @@ def handle_verify(args):
     """Verify subcommand handler. aci: ignore"""
     engine = ReflexionEngine()
     report = engine.run_check(args.command, timeout_s=args.timeout, auto_checkpoint=not args.no_checkpoint)
+    if getattr(args, "json", False):
+        print(json.dumps(asdict(report), indent=2, ensure_ascii=False))
+        if not report.passed:
+            sys.exit(report.returncode or 1)
+        return
+
     print(f"=== Reflexion Verification Report ===")
     print(f"Command: {report.command}")
     print(f"Status:  {'PASSED [OK]' if report.passed else 'FAILED [X]'}")
@@ -234,6 +243,13 @@ def handle_dag(args):
             skills=t.get("skills", []), prompt=t.get("prompt", ""),
             depends_on=t.get("depends_on", []), command=t.get("command"), cwd=t.get("cwd")
         )
+    if getattr(args, "json", False):
+        result = orchestrator.execute_commands_parallel()
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        if result['failed']:
+            sys.exit(1)
+        return
+
     print("=== Mermaid Topology ===\n" + orchestrator.to_mermaid())
     print("\n=== Executing Parallel Task Waves ===")
     result = orchestrator.execute_commands_parallel()
@@ -454,9 +470,9 @@ def handle_version(_args):
     except Exception:
         pass
     print("SuperAgent Autonomous SWE Superintelligence Engine")
-    print(f"Version:      v2.1.0-swe-frontier (Git: {commit})")
+    print(f"Version:      v2.2.0-frontier-hardened (Git: {commit})")
     print("Platform:     Arch Linux (Wayland/Niri) | Python 3.13+")
-    print("Capabilities: DAG Swarm, SAST, ACI Guard, Worktree Sandbox, Stdio MCP")
+    print("Capabilities: DAG Swarm (Kahn Waves), SAST, ACI Guard, Worktree Sandbox, Stdio MCP, Reflexion Oscillation Guard")
 
 
 def handle_benchmark(args):

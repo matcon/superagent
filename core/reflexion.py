@@ -6,10 +6,11 @@ Now integrates Pre-flight SAST security gates, ACI complexity checks, and transa
 import re
 import sys
 import time
+import hashlib
 import subprocess
 from pathlib import Path
 from dataclasses import dataclass, field, asdict
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Set
 
 from .memory import SuperAgentMemory
 from .sast import SASTScanner, Finding
@@ -29,6 +30,8 @@ class DiagnosticReport:
     sast_violations: List[Dict[str, Any]] = field(default_factory=list)
     complexity_violations: List[str] = field(default_factory=list)
     checkpoint_created: Optional[str] = None
+    fingerprint: Optional[str] = None
+    is_oscillating: bool = False
 
 
 class ReflexionEngine:
@@ -38,6 +41,7 @@ class ReflexionEngine:
         self.cwd = cwd or str(Path.cwd())
         self.memory = SuperAgentMemory()
         self.sast = SASTScanner()
+        self.seen_fingerprints: Set[str] = set()
 
     def create_git_checkpoint(self) -> Optional[str]:
         """Creates an ephemeral git checkpoint without altering current worktree state."""
@@ -130,6 +134,16 @@ class ReflexionEngine:
 
         hypothesis = self._formulate_hypothesis(passed, extracted_errors, matched_learnings, sast_violations, complexity_violations)
 
+        # Detección de oscilación ToT (cortar bucle si se repite exactamente el mismo fallo)
+        fingerprint = self.compute_fingerprint(stderr, extracted_errors, sast_violations, complexity_violations)
+        is_oscillating = False
+        if not passed:
+            if fingerprint in self.seen_fingerprints:
+                is_oscillating = True
+                hypothesis = f"[OSCILLATION GUARD] Repeated identical failure state (fingerprint: {fingerprint}). Aborting cyclical retry.\n" + hypothesis
+            else:
+                self.seen_fingerprints.add(fingerprint)
+
         return DiagnosticReport(
             command=command,
             passed=passed,
@@ -141,8 +155,16 @@ class ReflexionEngine:
             suggested_hypothesis=hypothesis,
             sast_violations=sast_violations,
             complexity_violations=complexity_violations,
-            checkpoint_created=checkpoint_hash
+            checkpoint_created=checkpoint_hash,
+            fingerprint=fingerprint,
+            is_oscillating=is_oscillating
         )
+
+    @staticmethod
+    def compute_fingerprint(stderr: str, errors: List[str], sast: List[Dict[str, Any]], complexity: List[str]) -> str:
+        """Genera un hash SHA-256 determinista del estado de fallo para evitar oscilaciones."""
+        raw = f"{stderr.strip()}|{sorted(errors)}|{len(sast)}|{sorted(complexity)}"
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
     def _get_modified_files(self) -> List[Path]:
         """Obtiene la lista de archivos modificados recientemente en git status."""

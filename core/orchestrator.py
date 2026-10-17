@@ -7,6 +7,7 @@ import json
 import time
 from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Any, Optional, Set
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import subprocess
 from pathlib import Path
@@ -65,33 +66,43 @@ class DAGOrchestrator:
         )
         return self
 
-    def validate_dag(self) -> List[str]:
-        """Validate dependencies and perform topological sort. Returns task execution order."""
-        in_degree = {nid: 0 for nid in self.nodes}
-        adj = {nid: [] for nid in self.nodes}
+    @classmethod
+    def validate_and_group_waves(cls, nodes: Dict[str, TaskNode]) -> List[List[str]]:
+        """Agrupa TaskNodes en oleadas concurrentes o lanza ValueError si existe un ciclo (algoritmo de Kahn)."""
+        in_degree = {nid: 0 for nid in nodes}
+        dependents = {nid: [] for nid in nodes}
 
-        for nid, node in self.nodes.items():
+        for nid, node in nodes.items():
             for dep in node.depends_on:
-                if dep not in self.nodes:
+                if dep not in nodes:
                     raise ValueError(f"Task '{nid}' depends on non-existent task '{dep}'")
-                adj[dep].append(nid)
+                dependents[dep].append(nid)
                 in_degree[nid] += 1
 
-        queue = [nid for nid, deg in in_degree.items() if deg == 0]
-        order = []
+        queue = deque([nid for nid, deg in in_degree.items() if deg == 0])
+        waves: List[List[str]] = []
+        visited = 0
 
         while queue:
-            curr = queue.pop(0)
-            order.append(curr)
-            for neighbor in adj[curr]:
-                in_degree[neighbor] -= 1
-                if in_degree[neighbor] == 0:
-                    queue.append(neighbor)
+            current_wave = list(queue)
+            queue.clear()
+            waves.append(current_wave)
+            visited += len(current_wave)
 
-        if len(order) != len(self.nodes):
-            raise ValueError("Cycle detected in Task DAG! Dependencies must be strictly acyclic.")
+            for nid in current_wave:
+                for child in dependents[nid]:
+                    in_degree[child] -= 1
+                    if in_degree[child] == 0:
+                        queue.append(child)
 
-        return order
+        if visited != len(nodes):
+            raise ValueError("Ciclo detectado en el DAG de TaskNodes; dependencias circulares no permitidas.")
+        return waves
+
+    def validate_dag(self) -> List[str]:
+        """Validate dependencies and perform topological sort using Kahn's algorithm."""
+        waves = self.validate_and_group_waves(self.nodes)
+        return [nid for wave in waves for nid in wave]
 
     def to_mermaid(self) -> str:
         """Render DAG as Mermaid flowchart."""

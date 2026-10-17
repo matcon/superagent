@@ -5,6 +5,7 @@ memory.py - Tripartite Memory Architecture (Episodic, Knowledge Graph, & Learnin
 import os
 import sys
 import json
+import re
 import sqlite3
 import subprocess
 from pathlib import Path
@@ -22,7 +23,10 @@ class SuperAgentMemory:
         self._init_db()
 
     def _get_conn(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self.db_path))
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+        conn.execute("PRAGMA busy_timeout=5000;")
         conn.row_factory = sqlite3.Row
         return conn
 
@@ -101,9 +105,17 @@ class SuperAgentMemory:
             conn.commit()
 
     def add_learning(self, category: str, problem: str, solution: str, context: str = "", tags: str = "") -> int:
-        """Record an error solved, technical insight, or architectural decision."""
+        """Record an error solved, technical insight, or architectural decision with deduplication."""
         with self._get_conn() as conn:
             cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id FROM learnings WHERE category = ? AND problem = ? AND solution = ? LIMIT 1",
+                (category, problem, solution)
+            )
+            existing = cursor.fetchone()
+            if existing:
+                return existing["id"]
+
             cursor.execute(
                 "INSERT INTO learnings (category, context, problem, solution, tags) VALUES (?, ?, ?, ?, ?)",
                 (category, context, problem, solution, tags)
@@ -111,14 +123,34 @@ class SuperAgentMemory:
             conn.commit()
             return cursor.lastrowid
 
+    def compact_learnings(self) -> int:
+        """Removes exact duplicate learnings and optimizes the FTS5 index."""
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                DELETE FROM learnings
+                WHERE id NOT IN (
+                    SELECT MIN(id)
+                    FROM learnings
+                    GROUP BY category, problem, solution
+                )
+            """)
+            deleted = cursor.rowcount
+            try:
+                cursor.execute("INSERT INTO learnings_fts(learnings_fts) VALUES('optimize');")
+            except Exception:
+                pass
+            conn.commit()
+            return deleted
+
     def search_learnings(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
-        """Search learnings using FTS5 BM25 relevance ranking."""
+        """Search learnings using FTS5 BM25 relevance ranking with hardened token sanitization."""
         # Sanitize query for FTS5 syntax
-        clean_query = "".join(c if c.isalnum() or c.isspace() else " " for c in query).strip()
-        if not clean_query:
+        clean_words = [w for w in re.findall(r"\w+", query) if w]
+        if not clean_words:
             return []
 
-        formatted_query = " OR ".join(f'"{word}"*' for word in clean_query.split())
+        formatted_query = " OR ".join(f'"{word}"*' for word in clean_words)
         with self._get_conn() as conn:
             cursor = conn.cursor()
             try:
@@ -132,14 +164,15 @@ class SuperAgentMemory:
                     LIMIT ?
                 """, (formatted_query, limit))
                 return [dict(row) for row in cursor.fetchall()]
-            except sqlite3.OperationalError:
-                # Fallback to LIKE
+            except (sqlite3.OperationalError, sqlite3.DatabaseError):
+                # Fallback to LIKE search across key columns
+                raw_query = " ".join(clean_words)
                 cursor.execute("""
                     SELECT id, category, context, problem, solution, tags, created_at
                     FROM learnings
                     WHERE problem LIKE ? OR solution LIKE ? OR tags LIKE ?
                     ORDER BY id DESC LIMIT ?
-                """, (f"%{clean_query}%", f"%{clean_query}%", f"%{clean_query}%", limit))
+                """, (f"%{raw_query}%", f"%{raw_query}%", f"%{raw_query}%", limit))
                 return [dict(row) for row in cursor.fetchall()]
 
     def record_adr(self, project_path: str, title: str, context: str, decision: str, consequences: str = "") -> int:

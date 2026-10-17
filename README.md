@@ -1,7 +1,7 @@
 # SuperAgent 🚀
 
 **Autonomous AI Cognitive, SWE Superintelligence & Distributed Execution Engine**  
-*Version: v2.1.0-swe-frontier | Grade: A+ (100/100)*
+*Version: v2.2.0-frontier-hardened | Grade: A+ (100/100)*
 
 SuperAgent is a high-performance, autonomous software engineering superintelligence (SWE-SI) and task orchestration engine. Built for high-reliability local development environments, SuperAgent provides closed-loop verification, episodic memory, static security analysis, container hardening, AST complexity guards, and native Model Context Protocol (MCP) server capabilities.
 
@@ -11,14 +11,16 @@ SuperAgent is a high-performance, autonomous software engineering superintellige
 
 ### 🧠 1. Tripartite Memory Architecture
 - **Episodic & Reflexion Memory**: SQLite with full-text search (`FTS5`) and BM25 relevance ranking.
+- **Concurrent WAL Hardening**: Non-blocking `PRAGMA journal_mode=WAL` with automated deduplication and memory compaction (`compact_learnings`).
 - **Topological Code Understanding**: Deep integration with [Graphify](https://github.com) knowledge graphs (`graphify query`, `GRAPH_REPORT.md`).
 - **Working Memory**: Dynamic execution context and scratch storage.
 
 ### 🛡️ 2. SWE Superintelligence & Closed-Loop Reflexion
 - **Closed-Loop Verification (`verify`)**: Executes tests against ephemeral git checkpoints, analyzing root causes and triggering auto-remediation without regression.
-- **AST Complexity Guard (`swe guard`)**: Enforces McCabe cyclomatic complexity $\le 15$, cognitive depth $\le 5$, and syntax validity.
-- **Self-Healing Code Engine (`swe fix`)**: Automatically remediates common SAST vulnerabilities and insecure Dockerfiles.
-- **Isolated Worktree Sandboxes (`swe sandbox`)**: Runs experimental code or risky commands inside isolated Git worktrees with safety promotion gates (`--promote`).
+- **Oscillation Guard**: SHA-256 failure state fingerprinting that detects and terminates cyclical or repetitive patch attempts.
+- **AST Complexity Guard (`swe guard`)**: Enforces McCabe cyclomatic complexity $\le 15$, cognitive depth $\le 5$, reporting exact line spans (`lines start-end`).
+- **Pre-Validated Auto-Fix (`swe fix`)**: Verifies `ast.parse()` in-memory before disk writes, generating Unified Diffs for full traceability.
+- **Isolated Worktree Sandboxes (`swe sandbox`)**: Ephemeral Git worktree execution with safety promotion gates (`--promote`) and guaranteed `git worktree prune` cleanup.
 - **Autonomous SWE Planning (`swe plan`)**: Decomposes technical objectives into 5 structured phases (Discovery, Contract, Implementation, Verification, Production Hardening).
 
 ### 🔒 3. DevSecOps & Hardened Infrastructure
@@ -27,11 +29,12 @@ SuperAgent is a high-performance, autonomous software engineering superintellige
 - **Production Artifact Synthesis**: Generates distroless Dockerfiles, Kubernetes Restricted manifests, and auto-rollback CI/CD pipelines.
 
 ### ⚡ 4. Real Concurrency & DAG Swarm Orchestration
-- **Wave-Based Concurrency**: Executes complex directed acyclic graphs (DAGs) in parallel execution waves.
+- **Kahn Topological Waves**: Mathematical cycle detection and wave-based concurrent execution scheduling.
 - **Auto-Tuned Telemetry Budget**: Evaluates system memory, CPU load, and host headroom before dispatching worker pools to prevent swapping.
 
 ### 🔌 5. Model Context Protocol (MCP) & Host Integration
 - **Native Stdio MCP Server (`mcp serve`)**: Exposes SuperAgent primitives to any MCP-compliant AI client over standard JSON-RPC 2.0.
+- **Automated CI/CD**: Native GitHub Actions workflow testing diagnostics, security audits, and benchmarks on each push.
 - **OS & Desktop Integration**: Native Wayland / Niri window manager IPC, Polkit graphical authentication (`pkexec`), and desktop notifications.
 - **JIT Tool Synthesis (`jit`)**: Generates, validates via AST, and registers new Python runtime tools on the fly.
 - **Host Benchmark (`benchmark`)**: Measures raw execution speeds (AST parsing throughput, Shannon entropy throughput, SQLite FTS5 QPS, Git latency).

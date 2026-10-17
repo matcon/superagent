@@ -6,6 +6,7 @@ Synthesizes and applies atomic, minimal-viable diffs to eliminate SAST and ACI G
 import ast
 import re
 import shlex
+import difflib
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
@@ -31,14 +32,47 @@ class AutoFixReport:
     fixes: List[FixAction] = field(default_factory=list)
     success: bool = True
     error: Optional[str] = None
+    diff: Optional[str] = None
 
 
 class AutoFixEngine:
     """Motor de auto-remediación atómica y curación de código."""
 
     @classmethod
+    def apply_safe_fix(cls, filepath: Path, patched_source: str) -> Dict[str, Any]:
+        """Valida sintaxis Python en memoria antes de escribir el FixAction en disco y genera unified diff."""
+        try:
+            original_source = filepath.read_text(encoding="utf-8", errors="ignore")
+        except Exception as exc:
+            return {"applied": False, "error": f"Error leyendo archivo original: {exc}"}
+
+        if filepath.suffix == ".py":
+            try:
+                ast.parse(patched_source, filename=str(filepath))
+            except SyntaxError as exc:
+                return {
+                    "applied": False,
+                    "error": f"SyntaxError en parche propuesto (línea {exc.lineno}): {exc.msg}",
+                }
+
+        diff = "".join(
+            difflib.unified_diff(
+                original_source.splitlines(keepends=True),
+                patched_source.splitlines(keepends=True),
+                fromfile=f"a/{filepath.name}",
+                tofile=f"b/{filepath.name}",
+            )
+        )
+        try:
+            filepath.write_text(patched_source, encoding="utf-8")
+        except Exception as exc:
+            return {"applied": False, "error": f"Error escribiendo en disco: {exc}"}
+
+        return {"applied": True, "diff": diff}
+
+    @classmethod
     def remediate_file(cls, file_path: Path) -> AutoFixReport:
-        """Aplica correcciones atómicas sobre un archivo individual."""
+        """Aplica correcciones atómicas sobre un archivo individual con pre-validación."""
         try:
             content = file_path.read_text(encoding="utf-8")
         except Exception as e:
@@ -63,17 +97,20 @@ class AutoFixEngine:
             if py_fixes:
                 modified = True
 
+        diff_str = None
         if modified:
             new_content = "\n".join(lines) + "\n"
-            # In-memory ACI Guard validation before writing to disk
+            # Pre-validación en memoria con ACI Guard y AST
             guard_rep = ACIGuard.audit_code(new_content, str(file_path))
             if not guard_rep.valid_syntax:
-                # Abort auto-fix if syntax was broken
                 return AutoFixReport(str(file_path), 0, [], False, f"Auto-fix aborted: generated invalid syntax ({guard_rep.syntax_error})")
 
-            file_path.write_text(new_content, encoding="utf-8")
+            safe_res = cls.apply_safe_fix(file_path, new_content)
+            if not safe_res["applied"]:
+                return AutoFixReport(str(file_path), 0, [], False, f"Auto-fix aborted: {safe_res['error']}")
+            diff_str = safe_res.get("diff")
 
-        return AutoFixReport(str(file_path), len(fixes_applied), fixes_applied, True)
+        return AutoFixReport(str(file_path), len(fixes_applied), fixes_applied, True, diff=diff_str)
 
     @classmethod
     def remediate_directory(cls, dir_path: Path) -> AutoFixReport:

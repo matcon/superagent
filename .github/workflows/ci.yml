@@ -1,0 +1,40 @@
+name: SuperAgent CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test-and-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sqlite3 libsqlite3-dev
+
+      - name: Run System Doctor
+        run: |
+          python3 cli.py doctor
+
+      - name: Run SAST Security & Secrets Audit
+        run: |
+          python3 cli.py devsecops audit .
+
+      - name: Verify Core Imports & CLI Load
+        run: |
+          python3 cli.py verify "python3 -c 'import cli; print(\"SuperAgent Core Load OK\")'"
+
+      - name: Run Primitives Benchmark (JSON)
+        run: |
+          python3 cli.py benchmark --json
