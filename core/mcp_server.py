@@ -7,6 +7,7 @@ import sys
 import json
 import traceback
 from pathlib import Path
+from dataclasses import asdict
 from typing import Dict, Any, List, Optional
 
 from .os_control import OSControl
@@ -15,6 +16,7 @@ from .memory import SuperAgentMemory
 from .aci_guard import ACIGuard
 from .sast import SASTScanner
 from .swe_pipeline import SWEPipelineEngine
+from .contract_spec import ContractSpecEngine
 from .auto_fix import AutoFixEngine
 from .reflexion import ReflexionEngine
 from .container_guard import ContainerGuard
@@ -29,22 +31,73 @@ class MCPServer:
     SERVER_VERSION = "2.1.0"
 
     @classmethod
-    def get_tool_definitions(cls) -> List[Dict[str, Any]]:
+    def _core_tool_defs(cls) -> List[Dict[str, Any]]:
         return [
             {
                 "name": "superagent_telemetry",
                 "description": "Obtiene la telemetría de hardware (RAM, CPU, carga) y estado de Wayland/Niri.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {}
-                }
+                "inputSchema": {"type": "object", "properties": {}}
             },
             {
                 "name": "superagent_doctor",
                 "description": "Ejecuta un diagnóstico exhaustivo del entorno del host, base de datos FTS5 y herramientas.",
+                "inputSchema": {"type": "object", "properties": {}}
+            },
+            {
+                "name": "superagent_verify",
+                "description": "Ejecuta un comando en bucle cerrado con checkpoint Git efímero y análisis de errores.",
                 "inputSchema": {
                     "type": "object",
-                    "properties": {}
+                    "properties": {
+                        "command": {"type": "string", "description": "Comando a validar"},
+                        "timeout": {"type": "integer", "description": "Timeout en segundos (por defecto 60)"}
+                    },
+                    "required": ["command"]
+                }
+            },
+            {
+                "name": "superagent_devsecops_generate",
+                "description": "Genera artefactos de infraestructura endurecidos (dockerfile distroless, k8s, cicd).",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "artifact": {"type": "string", "enum": ["dockerfile", "k8s", "cicd"]},
+                        "stack": {"type": "string", "enum": ["python", "node", "go"], "default": "python"},
+                        "app_name": {"type": "string", "default": "microservice-app"}
+                    },
+                    "required": ["artifact"]
+                }
+            }
+        ]
+
+    @classmethod
+    def _swe_tool_defs(cls) -> List[Dict[str, Any]]:
+        return [
+            {
+                "name": "superagent_swe_plan",
+                "description": "Descompone un objetivo de software en el Grafo DAG de 5 fases ejecutables de The Agency (Spec, Threat Model, Implementation, Tests, Deploy) con roles y skills.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "goal": {"type": "string", "description": "Objetivo técnico o requerimiento a desarrollar"}
+                    },
+                    "required": ["goal"]
+                }
+            },
+            {
+                "name": "superagent_swe_spec",
+                "description": "Genera una especificación formal Design-by-Contract y código con esquemas Pydantic v2 para un servicio antes de implementar.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "Título o nombre del servicio/módulo"},
+                        "domain_invariants": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Lista opcional de invariantes y reglas de negocio estrictas"
+                        }
+                    },
+                    "required": ["title"]
                 }
             },
             {
@@ -78,19 +131,12 @@ class MCPServer:
                     },
                     "required": ["path"]
                 }
-            },
-            {
-                "name": "superagent_verify",
-                "description": "Ejecuta un comando en bucle cerrado con checkpoint Git efímero y análisis de errores.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "command": {"type": "string", "description": "Comando a validar"},
-                        "timeout": {"type": "integer", "description": "Timeout en segundos (por defecto 60)"}
-                    },
-                    "required": ["command"]
-                }
-            },
+            }
+        ]
+
+    @classmethod
+    def _memory_tool_defs(cls) -> List[Dict[str, Any]]:
+        return [
             {
                 "name": "superagent_memory_search",
                 "description": "Busca en la memoria episódica persistente mediante búsqueda por texto completo SQLite BM25 FTS5.",
@@ -104,19 +150,46 @@ class MCPServer:
                 }
             },
             {
-                "name": "superagent_devsecops_generate",
-                "description": "Genera artefactos de infraestructura endurecidos (dockerfile distroless, k8s, cicd).",
+                "name": "superagent_memory_add",
+                "description": "Registra una lección técnica, solución a un bug o peculiaridad en la memoria episódica persistente (SQLite FTS5).",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "artifact": {"type": "string", "enum": ["dockerfile", "k8s", "cicd"]},
-                        "stack": {"type": "string", "enum": ["python", "node", "go"], "default": "python"},
-                        "app_name": {"type": "string", "default": "microservice-app"}
+                        "category": {"type": "string", "description": "Categoría (ej. bug, config, architecture, performance)"},
+                        "problem": {"type": "string", "description": "Descripción del problema o requerimiento"},
+                        "solution": {"type": "string", "description": "Solución técnica aplicada y verificada"},
+                        "context": {"type": "string", "description": "Contexto, archivo o comando relevante"},
+                        "tags": {"type": "string", "description": "Etiquetas separadas por comas"}
                     },
-                    "required": ["artifact"]
+                    "required": ["category", "problem", "solution"]
+                }
+            },
+            {
+                "name": "superagent_memory_graph",
+                "description": "Consulta la topología del grafo de conocimiento Graphify si existe en el proyecto.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Pregunta o concepto arquitectónico a consultar en el grafo"}
+                    },
+                    "required": ["query"]
+                }
+            },
+            {
+                "name": "superagent_devsecops_audit",
+                "description": "Audita estáticamente código o directorio buscando credenciales/secretos por entropía de Shannon (>4.5) y anti-patrones OWASP Top 10.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Ruta al directorio o archivo a escanear (por defecto '.')"}
+                    }
                 }
             }
         ]
+
+    @classmethod
+    def get_tool_definitions(cls) -> List[Dict[str, Any]]:
+        return cls._core_tool_defs() + cls._swe_tool_defs() + cls._memory_tool_defs()
 
     @classmethod
     def _tool_telemetry(cls, _args: Dict[str, Any]) -> str:
@@ -183,6 +256,53 @@ class MCPServer:
         return f"Unknown artifact: {art}"
 
     @classmethod
+    def _tool_swe_plan(cls, args: Dict[str, Any]) -> str:
+        plan = SWEPipelineEngine.decompose_swe_goal(args["goal"])
+        return json.dumps(plan, indent=2, ensure_ascii=False)
+
+    @classmethod
+    def _tool_swe_spec(cls, args: Dict[str, Any]) -> str:
+        spec = ContractSpecEngine.create_spec_scaffold(args["title"], args.get("domain_invariants"))
+        pydantic_code = ContractSpecEngine.export_pydantic_code(spec)
+        return json.dumps({
+            "spec": asdict(spec),
+            "pydantic_scaffold": pydantic_code
+        }, indent=2, ensure_ascii=False)
+
+    @classmethod
+    def _tool_devsecops_audit(cls, args: Dict[str, Any]) -> str:
+        p = Path(args.get("path", "."))
+        scanner = SASTScanner()
+        if p.is_file():
+            findings = scanner.scan_text(p.read_text(encoding="utf-8", errors="ignore"), filename=str(p))
+        else:
+            findings = scanner.scan_directory(p)
+        return json.dumps({
+            "target": str(p),
+            "total_findings": len(findings),
+            "findings": [asdict(f) for f in findings]
+        }, indent=2, ensure_ascii=False)
+
+    @classmethod
+    def _tool_memory_add(cls, args: Dict[str, Any]) -> str:
+        mem = SuperAgentMemory()
+        row_id = mem.add_learning(
+            category=args["category"],
+            problem=args["problem"],
+            solution=args["solution"],
+            context=args.get("context", ""),
+            tags=args.get("tags", "")
+        )
+        return json.dumps({"status": "OK", "recorded_id": row_id, "message": "Aprendizaje registrado con éxito en memoria persistente."})
+
+    @classmethod
+    def _tool_memory_graph(cls, args: Dict[str, Any]) -> str:
+        res = SuperAgentMemory.query_graphify(args["query"])
+        if res:
+            return res
+        return json.dumps({"status": "no_graph", "message": "No se encontró grafo graphify-out/graph.json en el directorio actual."})
+
+    @classmethod
     def call_tool(cls, name: str, arguments: Dict[str, Any]) -> str:
         """Ejecuta una herramienta y devuelve la salida serializada en texto."""
         dispatch = {
@@ -194,6 +314,11 @@ class MCPServer:
             "superagent_verify": cls._tool_verify,
             "superagent_memory_search": cls._tool_memory_search,
             "superagent_devsecops_generate": cls._tool_devsecops_generate,
+            "superagent_swe_plan": cls._tool_swe_plan,
+            "superagent_swe_spec": cls._tool_swe_spec,
+            "superagent_devsecops_audit": cls._tool_devsecops_audit,
+            "superagent_memory_add": cls._tool_memory_add,
+            "superagent_memory_graph": cls._tool_memory_graph,
         }
         handler = dispatch.get(name)
         if not handler:

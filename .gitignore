@@ -3,10 +3,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# SQLite databases temporary files
+# SQLite databases and temporary files
+*.db
 *.db-journal
 *.db-wal
 *.db-shm
+data/*.db
 
 # Virtual environments
 .venv/
